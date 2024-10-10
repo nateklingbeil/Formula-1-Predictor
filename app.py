@@ -17,9 +17,7 @@ def load_datasets(folder_path):
             data_dict[file] = df  # Add to dictionary
     return data_dict
 
-
-
-# function explores basic info about a selected dataset, such as its first 5 rows, column names, data types, etc.
+# function explores basic info about a selected dataset
 def explore_dataset(df):
     print("\n---First 5 rows---")
     print(df.head())  # Display first 5 rows
@@ -53,7 +51,6 @@ def select_and_explore_dataset(data_dict):
     else:
         print("---The dataset you selected does not exist.---")
 
-
 # Merge two datasets (`results.csv` and `races.csv`) based on common column like `raceId`.
 def merge_results_races(data_dict):
     results_df = data_dict["results.csv"]  # Loads race results data from the dict (results.csv)
@@ -63,55 +60,84 @@ def merge_results_races(data_dict):
 
 # handle missing data in the merged dataset
 def clean_data(dataframe):
-    #  Replacing placeholder values '\N' with NaN
+    # Replace placeholder values '\N' with NaN
     dataframe.replace({'\\N': pd.NA}, inplace=True)
     columns_to_remove = [
-        'resultId', 'position', 'positionOrder', 'time_x', 'fastestLapTime', 
-        'fastestLapSpeed', 'number', 'rank', 'url', 
+        'resultId', 'time_x', 'fastestLapTime', 'fastestLapSpeed', 
+        'number', 'rank', 'url', 
         'fp1_date', 'fp1_time', 'fp2_date', 'fp2_time', 
         'fp3_date', 'fp3_time', 'quali_date', 'quali_time', 
         'sprint_date', 'sprint_time', 'date', 'time_y'
     ]
-    dataframe.drop(columns=columns_to_remove, errors='ignore', inplace=True) # dropping columns that aren't useful
+    dataframe.drop(columns=columns_to_remove, errors='ignore', inplace=True)  # Dropping columns that aren't useful
 
-    essential_columns = ['raceId', 'driverId', 'position', 'laps', 'year']
-    dataframe.dropna(subset=essential_columns, inplace=True) # dropping rows with missing data in the essential rows
+    essential_columns = ['raceId', 'driverId', 'grid', 'laps', 'year', 'positionOrder']
+    dataframe.dropna(subset=essential_columns, inplace=True)  # Dropping rows with missing data in the essential columns
     return dataframe
 
-
 # Convert data types in relevant columns
-# Step 6: Convert specific columns (like `position`, `grid`, and `points`) to numeric data types for analysis.
 def convert_data_types(df_cleaned):
-    pass  # <-- Your code here
+    cols_to_convert = ['grid', 'laps', 'points']
+    for col in cols_to_convert:
+        df_cleaned[col] = pd.to_numeric(df_cleaned[col], errors='coerce')
+    return df_cleaned
 
 # Selecting relevant columns for analysis
-# Step 7: Select specific columns (e.g., 'grid', 'position') from the cleaned dataset to use in analysis or visualizations.
+
 def select_features(df_cleaned):
-    pass  # <-- Your code here
+    driver_group = df_cleaned.groupby('driverId')  # Groups all rows with same driverId
+    df_cleaned['driver_rolling_avg_points'] = driver_group['points'].rolling(window=5, min_periods=1).mean().reset_index(level=0, drop=True)
+    
+    constructor_group = df_cleaned.groupby('constructorId')
+    df_cleaned['constructor_rolling_avg_points'] = constructor_group['points'].rolling(window=5, min_periods=1).mean().reset_index(level=0, drop=True)
+
+    # Keeping 'positionOrder' for analysis
+    columns_to_keep = [
+        'driverId', 'constructorId', 'grid', 'laps', 'points', 'year', 'circuitId', 'driver_rolling_avg_points', 
+        'constructor_rolling_avg_points', 'positionOrder'
+    ]
+
+    df_selected = df_cleaned[columns_to_keep]
+    return df_selected
 
 # Heatmap to show the relationship between grid position and final position
-# Step 8: Create a heatmap to visualize the relationship between grid position and final position.
 def explore_data_heatmap(df_selected):
-    pass  # <-- Your code here
+    # Select only the columns needed for heatmap
+    heatmap_data = df_selected[['grid', 'positionOrder']]
+
+    # Drop rows where 'positionOrder' or 'grid' is missing
+    heatmap_data.dropna(subset=['grid', 'positionOrder'], inplace=True)
+
+    # Filter to only include grid and positionOrder values from 1 to 20
+    heatmap_data = heatmap_data[(heatmap_data['grid'] >= 1) & (heatmap_data['grid'] <= 20)]
+    heatmap_data = heatmap_data[(heatmap_data['positionOrder'] >= 1) & (heatmap_data['positionOrder'] <= 20)]
+
+    # Create a pivot table counting the occurrences of each combination of grid and final position
+    pivot = heatmap_data.pivot_table(index='positionOrder', columns='grid', aggfunc='size', fill_value=0)
+
+    # Ensure the pivot table only has indices and columns from 1 to 20
+    pivot = pivot.loc[1:20, 1:20]
+
+    # Create a heatmap using Seaborn
+    plt.figure(figsize=(12, 8))
+    sns.heatmap(pivot, annot=True, fmt='d', cmap='YlGnBu')
+    plt.title('Heatmap of Grid Position vs. Final Position (P1 - P20)')
+    plt.xlabel('Starting Position')
+    plt.ylabel('Final Position')
+    plt.show()
 
 # MAIN PROGRAM
-# if __name__ == "__main__":
+if __name__ == "__main__":
+    # Load datasets
+    data_dict = load_datasets('./archive')
 
-# Load all datasets from the ./archive folder
-data_dict = load_datasets('./archive')
+    # Clean and merge data
+    merged_data = merge_results_races(data_dict)
+    cleaned_data = clean_data(merged_data)
+    converted_data = convert_data_types(cleaned_data)
 
-# List all datasets
-# list_available_datasets(data_dict)
+    # Select relevant features for analysis
+    selected_data = select_features(converted_data)
 
-# Select and explore a dataset
-# select_and_explore_dataset(data_dict)
-
-# # Explore a specific dataset
-# explore_dataset(data_dict["races.csv"])  # Change 'races.csv' to whatever
-
-# Merge results.csv and races.csv, then explore the merged dataset
-merged_data = merge_results_races(data_dict)
-explore_dataset(merged_data)
-print(merged_data.head(10))
-
-
+    # Explore data with heatmap
+    explore_data_heatmap(selected_data)
