@@ -58,17 +58,26 @@ def select_and_explore_dataset(data_dict):
 def merge_results_races(data_dict):
     results_df = data_dict["results.csv"]  # Loads race results data from the dict (results.csv)
     races_df = data_dict["races.csv"]  # Load the race details data from the dictionary (races.csv)
-
-    # Merge results_df and races_df on the common column 'raceId' using a left join
-    # 'left join' means all rows from results_df will be kept, and matching rows from races_df will be added
     merged_race_data = pd.merge(results_df, races_df, on='raceId', how="left")  
-  
     return merged_race_data  # Return the merged DataFrame
 
 # handle missing data in the merged dataset
-# Step 5: Replace missing values (`\N`) and remove unnecessary columns, and clean any rows where essential data is missing.
-def clean_data(df_combined):
-    pass  # <-- Your code here
+def clean_data(dataframe):
+    #  Replacing placeholder values '\N' with NaN
+    dataframe.replace({'\\N': pd.NA}, inplace=True)
+    columns_to_remove = [
+        'resultId', 'position', 'positionOrder', 'time_x', 'fastestLapTime', 
+        'fastestLapSpeed', 'number', 'rank', 'url', 
+        'fp1_date', 'fp1_time', 'fp2_date', 'fp2_time', 
+        'fp3_date', 'fp3_time', 'quali_date', 'quali_time', 
+        'sprint_date', 'sprint_time', 'date', 'time_y'
+    ]
+    dataframe.drop(columns=columns_to_remove, errors='ignore', inplace=True) # dropping columns that aren't useful
+
+    essential_columns = ['raceId', 'driverId', 'position', 'laps', 'year']
+    dataframe.dropna(subset=essential_columns, inplace=True) # dropping rows with missing data in the essential rows
+    return dataframe
+
 
 # Convert data types in relevant columns
 # Step 6: Convert specific columns (like `position`, `grid`, and `points`) to numeric data types for analysis.
